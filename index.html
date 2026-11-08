@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mis cuentas</title>
+  <meta name="theme-color" content="#15202b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Mis cuentas">
+  <meta name="referrer" content="no-referrer">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- Conexión (primera vez) -->
+  <section id="conexion" class="conexion" hidden>
+    <form id="formConexion" class="conexion-caja" autocomplete="off">
+      <h1>Mis cuentas</h1>
+      <p>Conecta la app con tu hoja de cálculo. Los dos datos salen del editor de Apps Script (mira la guía de instalación).</p>
+      <label>Dirección de la API
+        <input id="cxUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false">
+      </label>
+      <label>Clave
+        <input id="cxToken" type="password" required minlength="20" spellcheck="false" autocomplete="current-password">
+      </label>
+      <p class="error" id="cxError" role="alert"></p>
+      <button class="btn primario" type="submit" id="cxBoton">Conectar</button>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <header class="barra">
+      <h1 class="marca">Mis cuentas</h1>
+      <span id="estado" class="estado" aria-live="polite"></span>
+      <button id="btnRecargar" class="icono" type="button" aria-label="Actualizar datos" title="Actualizar datos">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <!-- Saldo actual: lo primero que se ve al entrar -->
+      <section class="saldo" id="saldoHoy" aria-label="Saldo actual">
+        <span class="saldo-et">Saldo a día de hoy</span>
+        <span class="saldo-num num" id="saldoNum">—</span>
+        <span class="saldo-sub" id="saldoSub"></span>
+      </section>
+
+      <!-- Filtros compartidos por Resumen, Movimientos e Informes -->
+      <div class="filtros" id="filtros" role="group" aria-label="Filtros">
+        <label class="f"><span class="sr">Año</span><select id="fAnio"></select></label>
+        <label class="f"><span class="sr">Mes</span><select id="fMes"></select></label>
+        <label class="f"><span class="sr">Tipo</span>
+          <select id="fTipo"><option value="all">Gastos e ingresos</option><option value="gasto">Solo gastos</option><option value="ingreso">Solo ingresos</option></select>
+        </label>
+        <button type="button" class="f fbtn" id="fCats" aria-haspopup="dialog">Todas las categorías</button>
+        <button type="button" class="limpiar" id="fLimpiar" hidden>Quitar filtros</button>
+      </div>
+
+      <!-- RESUMEN -->
+      <section class="vista" id="v-resumen" aria-labelledby="t-resumen">
+        <h2 class="sr" id="t-resumen">Resumen</h2>
+        <dl class="kpis" id="kpis"></dl>
+        <p class="nota" id="kpiNota" hidden></p>
+
+        <div class="graficos">
+          <figure class="graf">
+            <figcaption><h3>Ingresos y gastos por mes</h3>
+              <span class="leyenda"><i style="background:var(--c-ingreso)"></i>Ingresos <i style="background:var(--c-gasto)"></i>Gastos</span>
+            </figcaption>
+            <div class="lienzo" id="gMeses"></div>
+            <details><summary>Ver datos</summary><div id="tMeses"></div></details>
+          </figure>
+          <figure class="graf">
+            <figcaption><h3>Saldo a final de mes</h3></figcaption>
+            <div class="lienzo" id="gSaldo"></div>
+            <details><summary>Ver datos</summary><div id="tSaldo"></div></details>
+          </figure>
+          <figure class="graf">
+            <figcaption><h3>Gastos por categoría</h3><span class="leyenda" id="gGasTot"></span></figcaption>
+            <div id="gCatGas"></div>
+          </figure>
+          <figure class="graf">
+            <figcaption><h3>Ingresos por categoría</h3><span class="leyenda" id="gIngTot"></span></figcaption>
+            <div id="gCatIng"></div>
+          </figure>
+        </div>
+      </section>
+
+      <!-- MOVIMIENTOS -->
+      <section class="vista" id="v-movs" hidden aria-labelledby="t-movs">
+        <div class="cab-vista">
+          <h2 id="t-movs">Movimientos</h2>
+          <input type="search" id="buscar" placeholder="Buscar concepto…" aria-label="Buscar por concepto">
+        </div>
+        <ol class="lista" id="lista"></ol>
+        <button type="button" class="btn" id="masMovs" hidden>Mostrar más</button>
+      </section>
+
+      <!-- INFORMES -->
+      <section class="vista" id="v-informes" hidden aria-labelledby="t-inf">
+        <h2 id="t-inf">Informes</h2>
+        <fieldset class="tipos" id="tiposInforme"><legend class="sr">Tipo de informe</legend></fieldset>
+        <div class="inf-acciones">
+          <p class="inf-periodo" id="infPeriodo"></p>
+          <div class="botones">
+            <button type="button" class="btn primario" id="btnPdf">Descargar PDF</button>
+            <button type="button" class="btn" id="btnXlsx">Descargar Excel</button>
+            <button type="button" class="btn" id="btnCompartir" hidden>Compartir PDF</button>
+          </div>
+          <button type="button" class="enlace" id="btnTodoXlsx">Excel con todos los informes del periodo (una pestaña por informe)</button>
+        </div>
+        <div class="previa" id="previa" aria-label="Vista previa del informe"></div>
+      </section>
+
+      <!-- AJUSTES -->
+      <section class="vista" id="v-ajustes" hidden aria-labelledby="t-aj">
+        <h2 id="t-aj">Ajustes</h2>
+        <dl class="ajustes" id="ajustesDatos"></dl>
+        <p class="nota">El nombre y el saldo de partida se cambian en la pestaña <b>Config</b> de tu hoja; las categorías, en la pestaña <b>Categorías</b>. Después pulsa actualizar.</p>
+        <h3>Usar la app en otro dispositivo</h3>
+        <p class="nota">Copia un enlace que ya lleva la dirección y la clave, y ábrelo en el móvil. Contiene tu clave: envíatelo solo a ti.</p>
+        <button type="button" class="btn" id="btnEnlace">Copiar enlace de configuración</button>
+        <h3>Desconectar este dispositivo</h3>
+        <p class="nota">Borra la clave y los datos guardados en este navegador. Tu hoja no cambia.</p>
+        <button type="button" class="btn peligro" id="btnSalir">Desconectar</button>
+      </section>
+    </main>
+
+    <button type="button" class="fab" id="fab"><span aria-hidden="true">+</span> Anotar</button>
+
+    <nav class="pestanas" aria-label="Secciones">
+      <button type="button" data-v="resumen" aria-current="page">Resumen</button>
+      <button type="button" data-v="movs">Movimientos</button>
+      <button type="button" data-v="informes">Informes</button>
+      <button type="button" data-v="ajustes">Ajustes</button>
+    </nav>
+  </div>
+
+  <!-- Hoja: anotar / editar movimiento -->
+  <div class="hoja-fondo" id="hojaMov" hidden>
+    <form class="hoja" id="formMov" role="dialog" aria-modal="true" aria-labelledby="tMov" novalidate>
+      <div class="hoja-cab"><h2 id="tMov">Anotar</h2><button type="button" class="icono" data-cerrar aria-label="Cerrar">✕</button></div>
+      <div class="seg" role="radiogroup" aria-label="Tipo">
+        <label><input type="radio" name="tipo" value="gasto" checked><span>Gasto</span></label>
+        <label><input type="radio" name="tipo" value="ingreso"><span>Ingreso</span></label>
+      </div>
+      <label>Importe
+        <span class="importe"><input id="mImporte" inputmode="decimal" autocomplete="off" placeholder="0,00" required><span aria-hidden="true">€</span></span>
+      </label>
+      <label>Categoría <select id="mCategoria" required></select></label>
+      <label>Concepto <input id="mConcepto" list="conceptos" maxlength="200" autocomplete="off" placeholder="Ej.: abono transporte"></label>
+      <datalist id="conceptos"></datalist>
+      <label>Fecha <input id="mFecha" type="date" required></label>
+      <p class="error" id="mError" role="alert"></p>
+      <div class="hoja-pie">
+        <button type="button" class="btn peligro" id="mBorrar" hidden>Eliminar</button>
+        <button type="submit" class="btn" id="mOtro" data-otro="1">Guardar y anotar otro</button>
+        <button type="submit" class="btn primario" id="mGuardar">Guardar</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Hoja: elegir categorías -->
+  <div class="hoja-fondo" id="hojaCats" hidden>
+    <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="tCats">
+      <div class="hoja-cab"><h2 id="tCats">Categorías</h2><button type="button" class="icono" data-cerrar aria-label="Cerrar">✕</button></div>
+      <div id="listaCats" class="cats"></div>
+      <div class="hoja-pie">
+        <button type="button" class="btn" id="catsNinguna">Todas</button>
+        <button type="button" class="btn primario" data-cerrar>Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" aria-live="polite" hidden></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/xlsx.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
