@@ -1,0 +1,9 @@
+{
+ "app": "mis-cuentas",
+ "v": 1,
+ "kdf": "PBKDF2-SHA256",
+ "iter": 600000,
+ "sal": "1KXOMTZFU2pTB9aFkvZEig==",
+ "iv": "7orAUICBGMwcXwtZ",
+ "datos": "Db4ZiGbTlJ2+0JBTa/c/yJumBTjjzexvKV6qAbUm9TVd6AVyP/1ISxVvDUcfWLID0ZoDjGz+XupX8b3pHed6JkIo+OQcTmZ3KuiGousISFpidOuJM1puJPeNEiz/iUhR5nAel4ytmD1tu0Afvhww+z4o6Y6bel+NugfOETHXPvBPp/EkoWzLUdcDLt0yilGiSNs4yl0zKISKiF41btcUVxU6gQwfvYFlc/6AsByxcuE7DrI9hp9LLrrCTeJOwM78RSPH0hiU2fjqyj+/llfu1Ek="
+}
