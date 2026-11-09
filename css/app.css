@@ -177,6 +177,7 @@ input[type="search"] { height: 38px; padding: 0 12px; border: 1px solid var(--ru
 .btn:hover { border-color: var(--ink-3); }
 .btn.primario { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.peligro { color: var(--peligro); }
+.btn.grande { height: 50px; border-radius: 25px; font-size: 1rem; width: 100%; }
 .btn:disabled { opacity: .5; cursor: default; }
 .fab { position: fixed; right: max(16px, calc(50% - 504px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom)); z-index: 25; height: 52px; padding: 0 20px 0 16px; border: 0; border-radius: 26px;
   background: var(--ink); color: var(--bg); font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 6px 18px rgb(21 32 43 / .28); display: inline-flex; align-items: center; gap: 6px; }
@@ -201,8 +202,10 @@ input[type="search"] { height: 38px; padding: 0 12px; border: 1px solid var(--ru
 @media (min-width: 640px) { .hoja-fondo { align-items: center; } .hoja { border-radius: 16px; } }
 .hoja-cab { display: flex; align-items: center; justify-content: space-between; }
 .hoja-cab h2 { font: 600 1.25rem var(--serif); }
+.hoja p { margin: 0; }
 .hoja label { display: grid; gap: 4px; font-size: .85rem; font-weight: 600; color: var(--ink-2); }
 .hoja input:not([type="radio"]):not([type="checkbox"]), .hoja select { height: 46px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); font-size: 1rem; font-weight: 400; color: var(--ink); width: 100%; }
+.pasos { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .importe { display: flex; align-items: center; gap: 8px; }
 .importe input { font: 600 1.6rem var(--sans) !important; height: 56px !important; font-variant-numeric: tabular-nums; }
 .importe span { font-size: 1.3rem; color: var(--ink-2); }
@@ -226,13 +229,28 @@ input[type="search"] { height: 38px; padding: 0 12px; border: 1px solid var(--ru
   background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: .92rem; box-shadow: 0 6px 18px rgb(0 0 0 / .2); }
 .aviso.error { background: var(--peligro); color: #fff; }
 
-/* ---------- conexión ---------- */
-.conexion { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.conexion-caja { width: 100%; max-width: 440px; display: grid; gap: 14px; }
-.conexion-caja h1 { font: 500 2.2rem var(--serif); padding-bottom: 4px; border-bottom: 4px double var(--ink); justify-self: start; }
-.conexion-caja p { margin: 0; color: var(--ink-2); }
-.conexion-caja label { display: grid; gap: 4px; font-size: .88rem; font-weight: 600; color: var(--ink-2); }
-.conexion-caja input { height: 46px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); font-size: .95rem; }
+/* ---------- puerta: entrar y preparar el acceso ---------- */
+.puerta { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom)); }
+.puerta-caja { width: 100%; max-width: 400px; display: grid; gap: 14px; }
+.puerta-icono { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 6px 18px rgb(21 32 43 / .18); }
+.puerta-caja h1 { font: 500 2.1rem var(--serif); padding-bottom: 4px; border-bottom: 4px double var(--ink); justify-self: start; }
+.puerta-sub { margin: -4px 0 4px; color: var(--ink-2); }
+.puerta-caja hr { width: 100%; border: 0; border-top: 1px solid var(--rule); margin: 4px 0; }
+.campo { display: grid; gap: 4px; font-size: .88rem; font-weight: 600; color: var(--ink-2); }
+.campo small { font-weight: 400; color: var(--ink-3); font-size: .8rem; }
+.puerta-caja input:not([type="checkbox"]) { width: 100%; height: 50px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); font-size: 1rem; font-weight: 400; color: var(--ink); }
+.clave { position: relative; display: block; }
+.clave input { padding-right: 76px !important; }
+.ver { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 36px; padding: 0 12px; border: 0; border-radius: 18px; background: var(--rule-2); color: var(--ink-2); font-size: .82rem; font-weight: 600; cursor: pointer; }
+.recordar { display: flex; align-items: center; gap: 10px; font-size: .92rem; color: var(--ink-2); cursor: pointer; }
+.recordar input { width: 20px; height: 20px; accent-color: var(--ink); margin: 0; }
+.puerta .enlace { justify-self: center; margin-top: 0; }
+.instalar { font-size: .9rem; color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: 14px; display: grid; gap: 10px; }
+.instalar p { margin: 0; }
+.instalar.tarjeta { margin-top: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radio); padding: 14px 16px; justify-items: start; }
+.ico-compartir { display: inline-block; width: 14px; height: 17px; vertical-align: -2px; margin: 0 1px;
+  background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 17'%3E%3Cpath d='M7 1v10M3.5 4.5 7 1l3.5 3.5M4 7H1.5v9h11V7H10' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 17'%3E%3Cpath d='M7 1v10M3.5 4.5 7 1l3.5 3.5M4 7H1.5v9h11V7H10' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
 
 @media print { .barra, .pestanas, .fab, .filtros, .inf-acciones, .tipos { display: none !important; } body { background: #fff; } }
 @media (max-width: 640px) {

@@ -10,25 +10,66 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Mis cuentas">
   <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <!-- Conexión (primera vez) -->
-  <section id="conexion" class="conexion" hidden>
-    <form id="formConexion" class="conexion-caja" autocomplete="off">
+  <!-- Entrada: solo la contraseña -->
+  <section id="entrada" class="puerta" hidden>
+    <form id="formEntrada" class="puerta-caja">
+      <img class="puerta-icono" src="icons/icon-192.png" alt="" width="64" height="64">
       <h1>Mis cuentas</h1>
-      <p>Conecta la app con tu hoja de cálculo. Los dos datos salen del editor de Apps Script (mira la guía de instalación).</p>
-      <label>Dirección de la API
-        <input id="cxUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false">
+      <p class="puerta-sub">Escribe tu contraseña para entrar.</p>
+      <!-- nombre fijo para que el móvil guarde la contraseña (y la rellene con Face ID o huella) -->
+      <input class="sr" type="text" name="username" autocomplete="username" value="Mis cuentas" tabindex="-1" aria-hidden="true" readonly>
+      <label class="campo">
+        <span class="sr">Contraseña</span>
+        <span class="clave">
+          <input id="enClave" name="password" type="password" required autocomplete="current-password" placeholder="Contraseña" spellcheck="false" autocapitalize="off">
+          <button type="button" class="ver" data-ver="enClave" aria-label="Mostrar contraseña">Ver</button>
+        </span>
       </label>
-      <label>Clave
-        <input id="cxToken" type="password" required minlength="20" spellcheck="false" autocomplete="current-password">
+      <label class="recordar"><input type="checkbox" id="enRecordar" checked> <span>No volver a pedirla en este dispositivo</span></label>
+      <p class="error" id="enError" role="alert"></p>
+      <button class="btn primario grande" type="submit" id="enBoton">Entrar</button>
+      <button type="button" class="enlace" id="irPreparar">¿Primera vez o has olvidado la contraseña?</button>
+      <div class="instalar" data-instalar hidden></div>
+    </form>
+  </section>
+
+  <!-- Preparar el acceso (una sola vez) -->
+  <section id="preparar" class="puerta" hidden>
+    <form id="formPreparar" class="puerta-caja">
+      <img class="puerta-icono" src="icons/icon-192.png" alt="" width="64" height="64">
+      <h1>Preparar el acceso</h1>
+      <p class="puerta-sub">Solo se hace una vez. Pon la dirección y la clave de tu Apps Script y elige una contraseña fácil de recordar para ti. A partir de ahí, solo te pedirá esa contraseña.</p>
+      <input class="sr" type="text" name="username" autocomplete="username" value="Mis cuentas" tabindex="-1" aria-hidden="true" readonly>
+      <label class="campo">Dirección de la API
+        <input id="prUrl" type="url" required placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false" autocomplete="off">
       </label>
-      <p class="error" id="cxError" role="alert"></p>
-      <button class="btn primario" type="submit" id="cxBoton">Conectar</button>
+      <label class="campo">Clave de Apps Script
+        <span class="clave">
+          <input id="prToken" type="password" required minlength="20" spellcheck="false" autocomplete="off">
+          <button type="button" class="ver" data-ver="prToken" aria-label="Mostrar clave">Ver</button>
+        </span>
+      </label>
+      <hr>
+      <label class="campo">Tu nueva contraseña
+        <span class="clave">
+          <input id="prClave1" name="password" type="password" required minlength="8" autocomplete="new-password" spellcheck="false" autocapitalize="off">
+          <button type="button" class="ver" data-ver="prClave1" aria-label="Mostrar contraseña">Ver</button>
+        </span>
+        <small>Mínimo 8 caracteres. Mejor una frase corta que recuerdes, por ejemplo «cuentas de casa 2026».</small>
+      </label>
+      <label class="campo">Repite la contraseña
+        <input id="prClave2" type="password" required autocomplete="new-password" spellcheck="false" autocapitalize="off">
+      </label>
+      <p class="error" id="prError" role="alert"></p>
+      <button class="btn primario grande" type="submit" id="prBoton">Crear acceso y entrar</button>
+      <button type="button" class="enlace" id="irEntrada" hidden>Volver a la contraseña</button>
     </form>
   </section>
 
@@ -121,12 +162,16 @@
         <h2 id="t-aj">Ajustes</h2>
         <dl class="ajustes" id="ajustesDatos"></dl>
         <p class="nota">El nombre y el saldo de partida se cambian en la pestaña <b>Config</b> de tu hoja; las categorías, en la pestaña <b>Categorías</b>. Después pulsa actualizar.</p>
-        <h3>Usar la app en otro dispositivo</h3>
-        <p class="nota">Copia un enlace que ya lleva la dirección y la clave, y ábrelo en el móvil. Contiene tu clave: envíatelo solo a ti.</p>
-        <button type="button" class="btn" id="btnEnlace">Copiar enlace de configuración</button>
-        <h3>Desconectar este dispositivo</h3>
-        <p class="nota">Borra la clave y los datos guardados en este navegador. Tu hoja no cambia.</p>
-        <button type="button" class="btn peligro" id="btnSalir">Desconectar</button>
+
+        <div class="instalar tarjeta" data-instalar hidden></div>
+
+        <h3>Acceso</h3>
+        <p class="nota" id="ajSesion"></p>
+        <div class="botones">
+          <button type="button" class="btn" id="btnCambiarClave">Cambiar contraseña</button>
+          <button type="button" class="btn peligro" id="btnSalir">Cerrar sesión</button>
+        </div>
+        <p class="nota">Cerrar sesión borra de este dispositivo la conexión y los datos guardados. Tu hoja no cambia.</p>
       </section>
     </main>
 
@@ -176,12 +221,40 @@
     </div>
   </div>
 
+  <!-- Hoja: cambiar contraseña -->
+  <div class="hoja-fondo" id="hojaClave" hidden>
+    <form class="hoja" id="formClave" role="dialog" aria-modal="true" aria-labelledby="tClave">
+      <div class="hoja-cab"><h2 id="tClave">Cambiar contraseña</h2><button type="button" class="icono" data-cerrar aria-label="Cerrar">✕</button></div>
+      <input class="sr" type="text" name="username" autocomplete="username" value="Mis cuentas" tabindex="-1" aria-hidden="true" readonly>
+      <label>Nueva contraseña <input id="ccClave1" name="password" type="password" required minlength="8" autocomplete="new-password" spellcheck="false" autocapitalize="off"></label>
+      <label>Repite la contraseña <input id="ccClave2" type="password" required autocomplete="new-password" spellcheck="false" autocapitalize="off"></label>
+      <p class="nota">Se descargará un archivo nuevo <b>acceso.json</b>. Súbelo a GitHub sustituyendo al anterior; hasta entonces sigue valiendo la contraseña antigua.</p>
+      <p class="error" id="ccError" role="alert"></p>
+      <div class="hoja-pie"><button type="submit" class="btn primario" id="ccBoton">Crear archivo nuevo</button></div>
+    </form>
+  </div>
+
+  <!-- Aviso tras preparar el acceso -->
+  <div class="hoja-fondo" id="hojaSubir" hidden>
+    <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="tSubir">
+      <div class="hoja-cab"><h2 id="tSubir">Último paso: sube acceso.json</h2><button type="button" class="icono" data-cerrar aria-label="Cerrar">✕</button></div>
+      <p>Se ha descargado el archivo <b>acceso.json</b>. Va cifrado con tu contraseña: sin ella no sirve para nada.</p>
+      <ol class="pasos">
+        <li>Entra en tu repositorio de GitHub de esta app.</li>
+        <li>Pulsa <b>Add file → Upload files</b> y arrastra <b>acceso.json</b> (al lado de index.html).</li>
+        <li>Pulsa <b>Commit changes</b>. En un par de minutos, cualquier dispositivo solo te pedirá la contraseña.</li>
+      </ol>
+      <div class="hoja-pie"><button type="button" class="btn" id="btnBajarOtra">Descargarlo otra vez</button><button type="button" class="btn primario" data-cerrar>Entendido</button></div>
+    </div>
+  </div>
+
   <div class="aviso" id="aviso" role="status" aria-live="polite" hidden></div>
 
   <script src="js/core.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/xlsx.js"></script>
   <script src="js/pdf.js"></script>
+  <script src="js/acceso.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /* Mis Cuentas — interfaz. Los datos viven en tu hoja de Google; aquí solo se muestran y se anotan. */
 (function () {
   'use strict';
-  const { Core, Charts } = window;
+  const { Core, Charts, Acceso } = window;
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -10,9 +10,18 @@
   const leer = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
   const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* almacenamiento lleno o bloqueado */ } };
   const borrarLS = k => { try { localStorage.removeItem(k); } catch (e) { } };
+  // sesión que dura hasta cerrar la app (cuando no se marca "no volver a pedirla")
+  const SS = {
+    leer: k => { try { return JSON.parse(sessionStorage.getItem(k)); } catch (e) { return null; } },
+    guardar: (k, v) => { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch (e) { } },
+    borrar: k => { try { sessionStorage.removeItem(k); } catch (e) { } }
+  };
 
   const S = {
     cx: null,               // {url, token}
+    recordar: true,         // ¿se queda abierta la sesión en este dispositivo?
+    acceso: null,           // contenido de acceso.json (cifrado)
+    accesoNuevo: null,      // acceso.json recién creado, pendiente de subir
     data: null,             // {cfg, cats, movs}
     sync: null,             // fecha de la última sincronización
     F: Object.assign({}, Core.FILTRO_VACIO),
@@ -36,17 +45,21 @@
     return j;
   }
 
+  function guardarDatos() {
+    if (S.recordar) guardar(LS.datos, { data: S.data, sync: (S.sync || new Date()).toISOString() });
+  }
+
   async function sincronizar(silencioso) {
     estado('Actualizando…');
     try {
       const j = await api('getAll');
       S.data = j.data; S.sync = new Date();
-      guardar(LS.datos, { data: S.data, sync: S.sync.toISOString() });
+      guardarDatos();
       ajustarFiltros(); render();
       estado('Actualizado a las ' + hora(S.sync));
       return true;
     } catch (e) {
-      if (e.code === 'AUTH') { mostrarConexion('La clave ya no es válida. Vuelve a introducirla.'); return false; }
+      if (e.code === 'AUTH') { claveCaducada(); return false; }
       estado(S.sync ? 'Sin conexión · datos de las ' + hora(S.sync) : 'Sin conexión');
       if (!silencioso || !S.data) aviso(e.message, true);
       return false;
@@ -55,34 +68,141 @@
   const hora = d => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   const estado = t => { $('#estado').textContent = t; };
 
-  /* ---------------- arranque ---------------- */
-  function iniciar() {
-    // enlace de configuración: #cfg=...
-    const m = location.hash.match(/#cfg=([^&]+)/);
-    if (m) {
-      try {
-        const o = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-        if (o.u && o.t) guardar(LS.cx, { url: o.u, token: o.t });
-      } catch (e) { /* enlace dañado: se pide a mano */ }
-      history.replaceState(null, '', location.pathname + location.search);
-    }
-    S.cx = leer(LS.cx);
-    const f = leer(LS.filtros); if (f) S.F = Object.assign({}, Core.FILTRO_VACIO, f);
-    const cache = leer(LS.datos);
-    if (cache && cache.data) { S.data = cache.data; S.sync = new Date(cache.sync); }
+  /* ---------------- acceso ---------------- */
+  async function iniciar() {
+    if (location.hash.indexOf('#cfg=') === 0) history.replaceState(null, '', location.pathname + location.search); // enlaces antiguos: ya no se usan
     enlazar();
-    if (!S.cx) { mostrarConexion(); return; }
-    mostrarApp();
+    pintarInstalar(); Acceso.alCambiarInstalar(pintarInstalar);
+    const f = leer(LS.filtros); if (f) S.F = Object.assign({}, Core.FILTRO_VACIO, f);
+
+    S.cx = leer(LS.cx); S.recordar = !!S.cx;
+    if (!S.cx) S.cx = SS.leer(LS.cx);
+    if (S.cx) { entrarApp(); return; }
+
+    mostrarPuerta('entrada'); // mientras se comprueba si existe acceso.json
+    $('#enBoton').disabled = true;
+    S.acceso = await Acceso.cargar();
+    $('#enBoton').disabled = false;
+    if (S.acceso) { mostrarPuerta('entrada'); setTimeout(() => $('#enClave').focus(), 50); }
+    else mostrarPuerta('preparar');
+  }
+
+  function entrarApp() {
+    const cache = S.recordar ? leer(LS.datos) : null;
+    if (cache && cache.data) { S.data = cache.data; S.sync = new Date(cache.sync); }
+    $('#entrada').hidden = true; $('#preparar').hidden = true; $('#app').hidden = false;
     if (S.data) { ajustarFiltros(); render(); estado('Datos de las ' + hora(S.sync)); }
     sincronizar(true);
   }
 
-  function mostrarConexion(error) {
-    $('#app').hidden = true; $('#conexion').hidden = false;
-    if (S.cx) { $('#cxUrl').value = S.cx.url; }
-    $('#cxError').textContent = error || '';
+  function mostrarPuerta(cual, error) {
+    $('#app').hidden = true;
+    $('#entrada').hidden = cual !== 'entrada';
+    $('#preparar').hidden = cual !== 'preparar';
+    $('#irEntrada').hidden = !S.acceso;
+    if (cual === 'entrada') $('#enError').textContent = error || '';
+    if (cual === 'preparar') $('#prError').textContent = error || '';
   }
-  function mostrarApp() { $('#conexion').hidden = true; $('#app').hidden = false; }
+
+  function guardarSesion(cx, recordar) {
+    S.cx = cx; S.recordar = recordar;
+    if (recordar) { guardar(LS.cx, cx); SS.borrar(LS.cx); }
+    else { SS.guardar(LS.cx, cx); borrarLS(LS.cx); borrarLS(LS.datos); }
+  }
+
+  function cerrarSesion() {
+    [LS.cx, LS.datos, LS.ultCat].forEach(borrarLS); SS.borrar(LS.cx);
+    S.cx = null; S.data = null; S.sync = null;
+    cerrarHojas();
+    $('#enClave').value = '';
+  }
+
+  async function claveCaducada() {
+    cerrarSesion();
+    S.acceso = S.acceso || await Acceso.cargar();
+    mostrarPuerta('preparar', 'La clave de Apps Script ya no es válida (¿la has cambiado?). Vuelve a preparar el acceso con la clave nueva.');
+  }
+
+  async function entrar(e) {
+    e.preventDefault();
+    const clave = $('#enClave').value;
+    if (!clave) { $('#enError').textContent = 'Escribe tu contraseña.'; return; }
+    const b = $('#enBoton'); b.disabled = true; b.textContent = 'Comprobando…'; $('#enError').textContent = '';
+    try {
+      if (!S.acceso) S.acceso = await Acceso.cargar();
+      if (!S.acceso) { mostrarPuerta('preparar', 'Todavía no hay ningún acceso preparado. Hazlo aquí una vez.'); return; }
+      const cx = await Acceso.descifrar(S.acceso, clave);
+      guardarSesion(cx, $('#enRecordar').checked);
+      $('#enClave').value = '';
+      entrarApp();
+    } catch (err) {
+      $('#enError').textContent = err.message === 'CLAVE' ? 'Esa no es la contraseña. Prueba otra vez.' : 'No se ha podido comprobar: ' + err.message;
+      $('#enClave').select();
+    } finally { b.disabled = false; b.textContent = 'Entrar'; }
+  }
+
+  function revisarClaves(c1, c2) {
+    if (c1.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+    if (c1 !== c2) return 'Las dos contraseñas no coinciden.';
+    return '';
+  }
+
+  function descargarAcceso(acc) {
+    descargar(new TextEncoder().encode(JSON.stringify(acc, null, 1)), 'acceso.json', 'application/json');
+  }
+
+  async function preparar(e) {
+    e.preventDefault();
+    const url = $('#prUrl').value.trim(), token = $('#prToken').value.trim();
+    const c1 = $('#prClave1').value, c2 = $('#prClave2').value;
+    let err = '';
+    if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) err = 'La dirección debe ser la de la aplicación web de Apps Script y terminar en /exec.';
+    else if (token.length < 20) err = 'La clave de Apps Script es la cadena larga que tienes en el editor (mínimo 20 caracteres).';
+    else err = revisarClaves(c1, c2);
+    if (err) { $('#prError').textContent = err; return; }
+    const b = $('#prBoton'); b.disabled = true; $('#prError').textContent = '';
+    try {
+      b.textContent = 'Comprobando la conexión…';
+      S.cx = { url, token };
+      try { await api('ping'); } catch (e2) { S.cx = null; throw new Error(e2.code === 'AUTH' ? 'La clave de Apps Script no es correcta.' : e2.message); }
+      b.textContent = 'Cifrando…';
+      S.accesoNuevo = await Acceso.cifrar(S.cx, c1);
+      S.acceso = S.accesoNuevo;
+      guardarSesion(S.cx, true);
+      ['#prToken', '#prClave1', '#prClave2'].forEach(s => { $(s).value = ''; });
+      descargarAcceso(S.accesoNuevo);
+      entrarApp();
+      abrirHoja('#hojaSubir');
+    } catch (e2) { $('#prError').textContent = e2.message; }
+    finally { b.disabled = false; b.textContent = 'Crear acceso y entrar'; }
+  }
+
+  async function cambiarClave(e) {
+    e.preventDefault();
+    const err = revisarClaves($('#ccClave1').value, $('#ccClave2').value);
+    if (err) { $('#ccError').textContent = err; return; }
+    const b = $('#ccBoton'); b.disabled = true; b.textContent = 'Cifrando…';
+    try {
+      S.accesoNuevo = await Acceso.cifrar(S.cx, $('#ccClave1').value);
+      $('#ccClave1').value = ''; $('#ccClave2').value = '';
+      cerrarHojas();
+      descargarAcceso(S.accesoNuevo);
+      abrirHoja('#hojaSubir');
+    } catch (e2) { $('#ccError').textContent = e2.message; }
+    finally { b.disabled = false; b.textContent = 'Crear archivo nuevo'; }
+  }
+
+  /* ---------------- instalar ---------------- */
+  function pintarInstalar() {
+    const st = Acceso.estadoInstalar();
+    const html = {
+      boton: '<p><b>Tenla en tu pantalla de inicio</b> y ábrela como una app más.</p><button type="button" class="btn primario" data-accion="instalar">Instalar app</button>',
+      ios: '<p><b>Tenla en tu pantalla de inicio:</b> en Safari pulsa el botón <b>Compartir</b> <span class="ico-compartir" aria-hidden="true"></span> y luego <b>«Añadir a pantalla de inicio»</b>.</p>',
+      manual: '<p><b>Tenla en tu pantalla de inicio:</b> abre el menú del navegador <b>⋮</b> y elige <b>«Instalar aplicación»</b> o <b>«Añadir a pantalla de inicio»</b>.</p>',
+      hecho: ''
+    }[st.modo];
+    $$('[data-instalar]').forEach(el => { el.innerHTML = html; el.hidden = !html; });
+  }
 
   /* ---------------- filtros ---------------- */
   function ajustarFiltros() {
@@ -287,10 +407,12 @@
     const { cfg, cats, movs } = S.data;
     const [y, m, d] = cfg.fecha_saldo_inicial.split('-');
     const fila = (k, v) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
-    let host = ''; try { host = new URL(S.cx.url).host; } catch (e) { }
     $('#ajustesDatos').innerHTML = fila('Nombre', cfg.nombre || '—') + fila('Saldo de partida', `${Core.eur(cfg.saldo_inicial)} el ${d}/${m}/${y}`) +
       fila('Categorías', `${cats.filter(c => c.tipo === 'gasto').length} de gasto · ${cats.filter(c => c.tipo === 'ingreso').length} de ingreso`) +
-      fila('Movimientos', movs.length) + fila('Conectada a', host) + fila('Última actualización', S.sync ? S.sync.toLocaleString('es-ES') : '—');
+      fila('Movimientos', movs.length) + fila('Última actualización', S.sync ? S.sync.toLocaleString('es-ES') : '—');
+    $('#ajSesion').textContent = S.recordar
+      ? 'Este dispositivo recuerda tu sesión: entras directamente al abrir la app.'
+      : 'Este dispositivo te pide la contraseña cada vez que abres la app.';
   }
 
   /* ---------------- hoja de movimiento ---------------- */
@@ -361,12 +483,12 @@
         const u = leer(LS.ultCat) || {}; u[mov.tipo] = mov.categoria; guardar(LS.ultCat, u);
         aviso((mov.tipo === 'gasto' ? 'Gasto' : 'Ingreso') + ' guardado: ' + Core.eur(mov.importe));
       }
-      guardar(LS.datos, { data: S.data, sync: (S.sync || new Date()).toISOString() });
+      guardarDatos();
       render();
       if (otro) { $('#mImporte').value = ''; $('#mConcepto').value = ''; rellenarConceptos(); $('#mImporte').focus(); }
       else cerrarHojas();
     } catch (e2) {
-      if (e2.code === 'AUTH') { cerrarHojas(); mostrarConexion('La clave ya no es válida. Vuelve a introducirla.'); }
+      if (e2.code === 'AUTH') claveCaducada();
       else $('#mError').textContent = e2.message;
     } finally { botones.forEach(b => { b.disabled = false; }); }
   }
@@ -382,7 +504,7 @@
     try {
       await api('delete', { id: S.editando.id });
       S.data.movs = S.data.movs.filter(m => m.id !== S.editando.id);
-      guardar(LS.datos, { data: S.data, sync: (S.sync || new Date()).toISOString() });
+      guardarDatos();
       cerrarHojas(); render(); aviso('Movimiento eliminado');
     } catch (e) { $('#mError').textContent = e.message; }
     finally { b.disabled = false; }
@@ -419,20 +541,28 @@
   }
 
   function enlazar() {
-    $('#formConexion').addEventListener('submit', async e => {
-      e.preventDefault();
-      const url = $('#cxUrl').value.trim(), token = $('#cxToken').value.trim();
-      if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) { $('#cxError').textContent = 'La dirección debe ser la de la aplicación web y terminar en /exec.'; return; }
-      S.cx = { url, token };
-      const b = $('#cxBoton'); b.disabled = true; b.textContent = 'Conectando…'; $('#cxError').textContent = '';
-      try {
-        await api('ping');
-        guardar(LS.cx, S.cx);
-        mostrarApp();
-        await sincronizar(false);
-      } catch (err) {
-        $('#cxError').textContent = err.code === 'AUTH' ? 'La clave no es correcta.' : err.message;
-      } finally { b.disabled = false; b.textContent = 'Conectar'; }
+    $('#formEntrada').addEventListener('submit', entrar);
+    $('#formPreparar').addEventListener('submit', preparar);
+    $('#formClave').addEventListener('submit', cambiarClave);
+    $('#irPreparar').addEventListener('click', () => mostrarPuerta('preparar'));
+    $('#irEntrada').addEventListener('click', () => mostrarPuerta('entrada'));
+    $$('[data-ver]').forEach(b => b.addEventListener('click', () => {
+      const i = document.getElementById(b.dataset.ver);
+      const ver = i.type === 'password';
+      i.type = ver ? 'text' : 'password';
+      b.textContent = ver ? 'Ocultar' : 'Ver';
+      i.focus();
+    }));
+    document.addEventListener('click', async e => {
+      if (!e.target.closest('[data-accion="instalar"]')) return;
+      if (await Acceso.instalar()) aviso('Instalada. Ya la tienes en tu pantalla de inicio.');
+    });
+    $('#btnCambiarClave').addEventListener('click', () => { $('#ccError').textContent = ''; abrirHoja('#hojaClave'); setTimeout(() => $('#ccClave1').focus(), 60); });
+    $('#btnBajarOtra').addEventListener('click', () => { if (S.accesoNuevo) descargarAcceso(S.accesoNuevo); });
+    $('#btnSalir').addEventListener('click', async () => {
+      cerrarSesion();
+      S.acceso = S.acceso || await Acceso.cargar();
+      mostrarPuerta(S.acceso ? 'entrada' : 'preparar');
     });
 
     $('#btnRecargar').addEventListener('click', () => sincronizar(false));
@@ -479,19 +609,6 @@
       const file = new File([await pdfDe(doc)], doc.archivo + '.pdf', { type: MIME_PDF });
       await navigator.share({ files: [file], title: doc.titulo });
     }));
-
-    $('#btnEnlace').addEventListener('click', async () => {
-      const cfg = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify({ u: S.cx.url, t: S.cx.token })))));
-      const url = location.origin + location.pathname + '#cfg=' + cfg;
-      try { await navigator.clipboard.writeText(url); aviso('Enlace copiado. Ábrelo en el otro dispositivo.'); }
-      catch (e) { window.prompt('Copia este enlace:', url); }
-    });
-    $('#btnSalir').addEventListener('click', () => {
-      [LS.cx, LS.datos, LS.filtros, LS.ultCat].forEach(borrarLS);
-      S.cx = null; S.data = null; S.sync = null;
-      $('#cxUrl').value = ''; $('#cxToken').value = '';
-      mostrarConexion();
-    });
 
     let tRes;
     window.addEventListener('resize', () => { clearTimeout(tRes); tRes = setTimeout(() => { if (S.vista === 'resumen' && S.data) pintarResumen(); }, 150); });
